@@ -1,6 +1,5 @@
 import requests
-import yaml
-import sys
+import bs4
 import json
 
 
@@ -9,28 +8,30 @@ def getHtml():
     return requests.get('https://itmo.ru/ru/schedule/0/P3114/schedule.htm', headers=h).text
 
 
-def parseToJsonV1(text):
+def parseToJson(text):
     lessons = []
-    text = text.replace("class='rasp_day_mobile'>", 'class="rasp_day_mobile">')
-    for dayText in text.split('class="rasp_day_mobile">')[1::]:
-        if '<dt style="font-size:14px;">' in dayText:
-            week = dayText.split('<dt style="font-size:14px;">')[1].split("</dt>")[0].strip()
-
-        else:
-            week = ""
-        dayText = dayText.split('</table></div>')[0]
-
-        dayName = dayText.split('<span>')[1].split("</span")[0].strip()
-        for i in dayText.split(' <td class="time">')[1::]:
-            timePeriod = i.split("<span>")[1].split("</span>")[0].strip()
-            audience = i.split('<dd class="rasp_aud_mobile">')[1].split("</dd>")[0].strip()
-            place = i.split('<i class="fa fa-map-marker"></i><span>')[1].split('</span>')[0].strip()
-            lessonInfo = i.split('<td class="lesson">')[1].split('</td>')[0]
-            lessonName = lessonInfo.split("<dd>")[1].split("</dd>")[0].strip()
-            lector = lessonInfo.split("<b>")[1].split("</b>")[0].strip()
-            if '</a>' in lector:
-                lector = lector.split("</a>")[1].strip()
-            formatLesson = lessonInfo.split('<td class="lesson-format">')[1].split("</td>")[0].strip()
+    soup = bs4.BeautifulSoup(text, features='html.parser').find('article', {'class': 'content_block'})
+    days = soup.find_all('h4', {'class': 'rasp_day_mobile'})
+    contents = soup.find_all('div', {'class': 'rasp_tabl_day'})
+    for i in range(len(days)):
+        d1 = contents[i].find_all('td', {'class': 'time'})
+        lesson = contents[i].find_all('td', {'class': 'lesson'})
+        format_lesson = contents[i].find_all('td', {'class': 'lesson-format'})
+        for x in range(len(d1)):
+            time = d1[x].find('span').text.strip()
+            week = d1[x].find('div').text.strip()
+            audience = d1[x].find('dd').text.strip()
+            place = d1[x].find('dt').text.strip()
+            lesson_name = lesson[x].find('dd').text.strip()
+            person_name = lesson[x].find('b').text.strip()
+            lesson_format = format_lesson[x].text.strip()
+            print(time, week, audience, place, lesson_name, person_name, lesson_format)
+        break
+        day_name = days[i].text.strip()
+        time = contents[i].find('td', {'class': 'time'}).text.strip()
+        print(day_name, time)
+    exit(0)
+    """
             lessons.append({
                 "day": dayName,
                 "time": timePeriod,
@@ -43,35 +44,15 @@ def parseToJsonV1(text):
             })
 
     return lessons
+    """
 
 
-def parseToYaml(js):
-    #sys.stdout.write(yaml.dump(js, allow_unicode=True))
-    res = []
-    for i in js:
-        fl = False
-        for j in i.keys():
-            if not fl:
-                fl = True
-                res.append(f"- {j}: {i[j]}")
-            else:
-                res.append(f'  {j}: {i[j]}')
-    return res, js
 
-
-def write(y, js):
+def write(js):
     with open('result.json', 'w', encoding='UTF-8') as outfile:
         json.dump(js, outfile, ensure_ascii=False)
     outfile.close()
 
-    with open('result.yaml', 'w', encoding='UTF-8') as outfile:
-        for i in y:
-            outfile.write(i)
-            outfile.write('\n')
-    outfile.close()
-
-
 def main():
-    a, b = parseToYaml(parseToJsonV1(getHtml()))
-    write(a, b)
+    write(parseToJson(getHtml()))
 main()
